@@ -8,149 +8,164 @@ A fully normalised relational database for managing hospital operations — buil
 
 ```
 hospital_dbms/
-├── assets/                         # ERDs and schema diagrams
+├── assets/
 │   ├── HMDB.svg                    # Entity-Relationship Diagram (vector)
 │   ├── HMDB.png                    # ERD (raster)
 │   ├── HMDB1.png                   # Alternate ERD view
-│   └── HMDB crttable.png           # CREATE TABLE visualisation
+│   └── HMDB crttable.png           # phpMyAdmin table overview screenshot
 │
 ├── docs/                           # Design documentation
-│   ├── HMDB.doc                    # Full project write-up
-│   ├── HMDB 1nf.doc                # First Normal Form analysis
-│   ├── HMDB 2nf.doc                # Second Normal Form analysis
-│   ├── HMDB 3nf.doc                # Third Normal Form analysis
-│   ├── HMDB bcnf.doc               # Boyce-Codd Normal Form analysis
-│   └── 17CG023178_23PBF02622.pdf   # Project report
+│   └── Report.pdf   # Project report
 │
 └── sql/
-    ├── 1_initial_schema_and_data/  # Base schema + seed data
-    │   ├── hmsdb.sql               # Original schema definition
-    │   ├── hmsdbs.sql              # Schema with constraints
-    │   ├── hmsdbins.sql            # Initial data inserts
-    │   └── hmsdb_insaft1nf.sql     # Data inserts post-1NF
+    ├── 1_initial_schema_and_data/
+    │   ├── hmsdb.sql               # Original unnormalised schema (15 tables)
+    │   ├── hmsdbs.sql              # Schema with additional constraints
+    │   ├── hmsdbins.sql            # Seed data for all 15 tables
+    │   └── hmsdb_insaft1nf.sql     # Revised seed data aligned to 1NF schema
     │
-    ├── 2_normalization/            # Progressive normalisation steps
-    │   ├── hmsdb1nf.sql            # First Normal Form
-    │   ├── hmsdb2nf.sql            # Second Normal Form
-    │   ├── hmsdb3nf.sql            # Third Normal Form
-    │   └── hmsdbbcnf.sql           # Boyce-Codd Normal Form
+    ├── 2_normalization/
+    │   ├── hmsdb1nf.sql            # First Normal Form — added MedicalHistory table
+    │   ├── hmsdb2nf.sql            # Second Normal Form — extracted Department_Staff
+    │   ├── hmsdb3nf.sql            # Third Normal Form — extracted Specialist table
+    │   └── hmsdbbcnf.sql           # BCNF — extracted Doctor_Specialist junction table
     │
-    └── 3_advanced_features/        # Stored routines & queries
-        ├── hmsdbfunc.sql           # User-defined functions
-        ├── hmsdbproc.sql           # Stored procedures
-        ├── hmsdbtrig.sql           # Triggers
-        └── hmsdbqry.sql            # Advanced queries
+    └── 3_advanced_features/
+        ├── hmsdbfunc.sql           # User-defined function: GetTotalBillingAmount()
+        ├── hmsdbproc.sql           # Stored procedures: RegisterPatient, ScheduleAppointment
+        ├── hmsdbtrig.sql           # Triggers: IncrementVisitCount, PreventDuplicateAppointment
+        └── hmsdbqry.sql            # Analytical queries across all core tables
 ```
 
 ---
 
-## 🗃️ Database Overview
-
-The HMDB models the core entities of a hospital environment:
-
-| Entity | Description |
+## 🗃️ Database Schema
+ 
+The HMDB comprises **15 tables** (InnoDB, utf8mb4) modelling the core entities of a hospital:
+ 
+| Table | Description |
 |---|---|
-| **Patient** | Demographics, admission details, ward assignment |
-| **Doctor** | Specialisation, department, schedule |
-| **Nurse** | Ward assignment, shift details |
-| **Department** | Hospital departments and their heads |
-| **Ward** | Capacity, type, assigned nursing staff |
-| **Appointment** | Patient-doctor consultations |
-| **Prescription** | Medications issued per patient per visit |
-| **Bill** | Itemised billing per patient |
-
+| `Patient` | Demographics: name, DOB, gender, blood group, contact, address |
+| `Doctor` | Specialisation, department assignment, consultation charge |
+| `Department` | Hospital departments (Cardiology, Neurology, Oncology, etc.) |
+| `HODs` | Junction table mapping doctors to their department head roles |
+| `Appointment` | Patient–doctor consultations with datetime and description |
+| `Visit` | Per-visit vitals (weight, height), diagnosis, and visit charge |
+| `Treatment` | Test results and treatment notes per visit |
+| `Test` | Diagnostic tests and their prerequisites |
+| `Medicines` | Drug catalogue with price, dose, type, and manufacturer |
+| `Rooms` | Room types (ICU, Private, General Ward, etc.) with charges |
+| `Staff` | Non-doctor staff: nurses, pharmacists, lab techs, admin, security |
+| `In_Patients` | Admitted patients with room assignment and admission/discharge dates |
+| `Out_patients` | Walk-in patients with visit date and treatment provided |
+| `Billing_info` | Composite bill linking patient, visit, doctor, medicine, room, and staff |
+| `Feedback` | Patient satisfaction ratings (1–5) and comments |
+ 
 ---
-
+ 
 ## 🔢 Normalisation Journey
-
-The schema was designed iteratively, documenting anomaly elimination at each stage:
-
-| Stage | File | What Changed |
+ 
+The schema was designed iteratively, with each stage eliminating a specific class of data anomaly:
+ 
+| Stage | File | Key Change |
 |---|---|---|
-| **Unnormalised** | `hmsdb.sql` | Raw schema with repeating groups and composite attributes |
-| **1NF** | `hmsdb1nf.sql` | Atomic values; eliminated repeating groups; added primary keys |
-| **2NF** | `hmsdb2nf.sql` | Removed partial dependencies on composite keys |
-| **3NF** | `hmsdb3nf.sql` | Removed transitive dependencies |
-| **BCNF** | `hmsdbbcnf.sql` | Every determinant is a candidate key |
-
+| **Unnormalised** | `hmsdb.sql` | `Pat_MedHistory` stored inline on `Patient`; `Staff` composite PK `(Staff_ID, Dept_ID)` mixing staff and department concerns |
+| **1NF** | `hmsdb1nf.sql` | Extracted `MedicalHistory` table; all attributes atomic; proper primary keys on every table |
+| **2NF** | `hmsdb2nf.sql` | Removed partial dependency — `Staff` given single-column PK; department assignment moved to `Department_Staff` junction table |
+| **3NF** | `hmsdb3nf.sql` | Removed transitive dependency — `Doc_Specialist` and `Doc_charge` determined by specialisation, not doctor; extracted to `Specialist` table |
+| **BCNF** | `hmsdbbcnf.sql` | Every determinant is a candidate key — doctor-to-specialisation is a many-to-many relationship; resolved via `Doctor_Specialist` junction table |
+ 
 ---
-
+ 
 ## ⚙️ Advanced SQL Features
-
-### Stored Procedures (`hmsdbproc.sql`)
-- Admit / discharge a patient
-- Generate billing summaries
-- Schedule appointments with conflict detection
-
-### Triggers (`hmsdbtrig.sql`)
-- Auto-update bed availability on admission/discharge
-- Audit log on record modification
-- Prevent double-booking of doctors
-
-### User-Defined Functions (`hmsdbfunc.sql`)
-- Calculate patient age from DOB
-- Compute total bill with tax
-- Determine ward occupancy rate
-
-### Advanced Queries (`hmsdbqry.sql`)
-- Patients per doctor (aggregation)
-- Unpaid bills report (JOIN + filter)
-- Most prescribed medications (GROUP BY + ORDER BY)
-- Available beds by ward (subquery / window function)
-
+ 
+### User-Defined Function — `hmsdbfunc.sql`
+ 
+```sql
+GetTotalBillingAmount(p_patID VARCHAR(10)) RETURNS DECIMAL(10,2)
+```
+Computes total spend for a patient by summing medicine prices and room charges across all their bills.
+ 
 ---
-
+ 
+### Stored Procedures — `hmsdbproc.sql`
+ 
+| Procedure | Description |
+|---|---|
+| `RegisterPatient` | Inserts a new patient record with auto-incremented ID; normalises email to lowercase |
+| `ScheduleAppointment` | Books an appointment using `UUID()` for the appointment ID |
+ 
+---
+ 
+### Triggers — `hmsdbtrig.sql`
+ 
+| Trigger | Event | Action |
+|---|---|---|
+| `IncrementVisitCount` | `AFTER INSERT ON Visit` | Increments `Visit_Count` on the `Patient` record |
+| `PreventDuplicateAppointment` | `BEFORE INSERT ON Appointment` | Raises `SQLSTATE 45000` if the same patient already has an appointment with the same doctor on the same date |
+ 
+---
+ 
+### Analytical Queries — `hmsdbqry.sql`
+ 
+- Full patient information retrieval
+- Appointment details with patient and doctor names (3-table JOIN)
+- Doctor specialisations and department affiliations
+- Visit records with diagnosis and appointment context
+- Billing summary with patient name resolution
+- Complete medicines catalogue
+---
+ 
+## 📐 Entity-Relationship Diagram
+ 
+![ERD](assets/HMDB.png)
+ 
+---
+ 
 ## 🚀 Getting Started
-
+ 
 ### Prerequisites
-- MySQL 8.0+ or PostgreSQL 14+ (SQL is ANSI-compatible with minor dialect adjustments)
-- A SQL client: MySQL Workbench, DBeaver, pgAdmin, or `psql`/`mysql` CLI
-
+- MySQL 8.0+
+- MySQL Workbench, DBeaver, or the `mysql` CLI
 ### Setup
-
+ 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/<your-username>/hospital_dbms.git
-cd hospital_dbms
-
-# 2. Create the database
-mysql -u root -p -e "CREATE DATABASE hmdb;"
-
-# 3. Load schema (run in order)
-mysql -u root -p hmdb < sql/1_initial_schema_and_data/hmsdb.sql
-mysql -u root -p hmdb < sql/1_initial_schema_and_data/hmsdbs.sql
-mysql -u root -p hmdb < sql/1_initial_schema_and_data/hmsdbins.sql
-
-# 4. Apply final normalised schema
-mysql -u root -p hmdb < sql/2_normalization/hmsdbbcnf.sql
-
-# 5. Load advanced features
-mysql -u root -p hmdb < sql/3_advanced_features/hmsdbproc.sql
-mysql -u root -p hmdb < sql/3_advanced_features/hmsdbtrig.sql
-mysql -u root -p hmdb < sql/3_advanced_features/hmsdbfunc.sql
+git clone https://github.com/<your-username>/hospital-dbms.git
+cd hospital-dbms
+ 
+# 2. Run the final normalised schema (BCNF) — this also creates the HMDB database
+mysql -u root -p < sql/2_normalization/hmsdbbcnf.sql
+ 
+# 3. Load seed data
+mysql -u root -p HMDB < sql/1_initial_schema_and_data/hmsdbins.sql
+ 
+# 4. Load advanced features
+mysql -u root -p HMDB < sql/3_advanced_features/hmsdbfunc.sql
+mysql -u root -p HMDB < sql/3_advanced_features/hmsdbproc.sql
+mysql -u root -p HMDB < sql/3_advanced_features/hmsdbtrig.sql
+ 
+# 5. Run analytical queries
+mysql -u root -p HMDB < sql/3_advanced_features/hmsdbqry.sql
 ```
-
+ 
+> **Note:** Each normalisation file (`hmsdb.sql` through `hmsdbbcnf.sql`) begins with `DROP DATABASE HMDB; CREATE DATABASE HMDB;` — run them individually to inspect each normalisation stage, or jump straight to BCNF for the final schema.
+ 
 ---
-
-## 📐 Entity-Relationship Diagram
-
-![ERD](assets/HMDB.png)
-
----
-
+ 
 ## 🤝 Contributing
-
+ 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
+ 
 ---
-
+ 
 ## 📄 License
-
+ 
 This project is for academic and educational purposes.
-
+ 
 ---
-
-## 👤 Author
+ 
+## 👤 Authors
 
 **Tayme** — [GitHub](https://github.com/pukkahb)
 **Esther Idowu**
