@@ -152,4 +152,5 @@ This project is for academic and educational purposes.
 
 ## 👤 Author
 
-**Tayme** — [GitHub](https://github.com/<your-username>)
+**Tayme** — [GitHub](https://github.com/pukkahb)
+**Esther Idowu**
