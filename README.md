@@ -169,4 +169,4 @@ This project is for academic and educational purposes.
 
 **Tayme** — [GitHub](https://github.com/pukkahb)
 
-**Esther Idowu**
+**Esther Idowu** — [GitHub](https://github.com/Esther-Idowu)
